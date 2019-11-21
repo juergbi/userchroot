@@ -56,7 +56,14 @@ static void create_fundamental_device(const char* chroot_path,
     exit(ERR_EXIT_CODE);
   }
 #else
-  rc = mknod(final_path, realdev.st_mode, realdev.st_rdev);
+  // we need to let the devices be created with the appropriate
+  // modes. However, since the file will be group-owned by
+  // the user creating the device, we make sure the owner group gets
+  // the same permissions as users from other groups.
+  mode_t perms = realdev.st_mode;
+  perms = (perms & 0606) | ((perms & 0006) << 3);
+
+  rc = mknod(final_path, perms, realdev.st_rdev);
   if (rc) {
     fprintf(stderr,"Failed to create the device for %s.", final_path);
     exit(ERR_EXIT_CODE);
@@ -103,11 +110,6 @@ static void unlink_fundamental_device(const char* chroot_path,
 }
 
 int create_fundamental_devices(const char* chroot_path) {
-  // we need to let the devices be created with the appropriate
-  // modes. However, since the file will be group-owned by
-  // the user creating the device, we make sure the umask prevent
-  // the user from having any permission granted just by the group.
-  mode_t original_mask = umask(0070);
   create_fundamental_device(chroot_path,"/dev/null");
   create_fundamental_device(chroot_path,"/dev/zero");
   create_fundamental_device(chroot_path,"/dev/random");
@@ -118,7 +120,6 @@ int create_fundamental_devices(const char* chroot_path) {
   create_fundamental_device(chroot_path,"/dev/poll");
 #endif
 
-  umask(original_mask);
   return 0;
 }
 
